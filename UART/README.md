@@ -32,4 +32,3 @@ To run the testbench run:
 ```bash
 make
 
-
