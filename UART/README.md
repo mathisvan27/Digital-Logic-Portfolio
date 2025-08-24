@@ -17,3 +17,19 @@ This is my attempt at creating a UART transmitter (no receiver) using a 1 MHz pr
 My UART transmitter contains one START bit, 8 DATA bits, no PARITY bits and 2 STOP bits. 
 
 It consists of a 9600 bps baud generator, as UART only uses certain speeds (such as 9600, 19200, 38400 etc.) so the processor clock has to be "slowed down" in order to match the baud rate of the UART protocol. As well as a baud generator, a finite state machine is used to compartmentalise each of the states, controlling what the outputs are as a result of what state it is in. 
+
+
+# How To Test Transmitter
+
+In order to test the UART Transmitter, the following prerequisites are needed:
+
+*  cocotb
+*  Verilator
+*  Python3.8+
+
+To run the testbench run:
+
+```bash
+make
+
+
