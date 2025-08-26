@@ -3,7 +3,7 @@ from cocotb.triggers import RisingEdge, Timer
 from cocotb.clock import Clock
 
 
-BAUD_DIV = 104  # 1 MHz / 9600 ≈ 104.167 (your code uses 103)
+BAUD_DIV = 104  # 1 MHz / 9600 ≈ 104.167 
 
 async def reset_dut(dut):
     dut.reset.value = 1
