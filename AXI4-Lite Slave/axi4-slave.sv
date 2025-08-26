@@ -1,167 +1,160 @@
 module slave(
     input clk,
-    input ARESETN,
-    input [7:0] ARAADDR,
-    input ARVALID,
-    input RREADY,
-    input BREADY,
-    input [6:2] AWADDR,
-    input AWVALID,
-    input WVALID,
-    input [31:0] WDATA, 
-    input [1023:0] REGISTERS_IN,
-    output logic [1023:0] REGISTERS_OUT,
-    output logic AWREADY,
-    output logic WREADY,
-    output logic BVALID,
-    output logic [1:0] BRESP,
-    output ARREADY,
-    output RVALID,
-    output [7:0] RDATA
+    input reset,
+    input [6:2] araddr,
+    input arvalid,
+    input rready,
+    input [6:2] awaddr,
+    input bready,
+    input [31:0] wdata,
+    input awvalid,
+    input wvalid,
+    output logic awready,
+    output logic bvalid,
+    output logic arready,
+    output logic [1:0] response,
+    output logic rvalid,
+    output logic [31:0] rdata,
+    output logic wready,
 );
 
-
-// WRITE operations
-
-logic [6:2] write_addr;
-logic [31:0] write_data;
-logic cap_add, cap_data;
-
-parameter WRITE_IDLE = 0, WRITE = 1, WRITE_RESP = 2;
-logic [2:0] write_state, next_write_state;
+logic [31:0] internal_register [31:0];
 
 
-always @(posedge clk, negedge ARESETN) begin
+// read logic 
 
-    if (~ARESETN) begin
-        WREADY <= 0;
-        AWREADY <= 0;
-        BVALID <= 0;
-        cap_add <= 0;
-        cap_data <= 0;
-        write_state <= WRITE_IDLE;
+
+logic [1:0] read_state, read_next_state;
+logic [6:2] read_addr;
+parameter read_idle = 0, read = 1;
+
+
+always @(posedge clk, negedge reset) begin
+    if (~reset) begin
+        read_state <= read_idle;
+        arready <= 0;
+        rvalid <= 0;
+
     end
     else begin
-        if (write_state == WRITE_IDLE) begin
-            if (AWVALID & AWREADY) begin 
-                write_addr <= AWADDR;
-                cap_add <= 1;
-            end
-
-            if (WVALID & WREADY) begin
-                cap_data <= 1;
-            end
-            
+        if (read_state == read_idle) begin
+            rvalid <= 0;
+            arready <= 1;
         end
-
-        write_state <= next_write_state;
+        if (read_state == read_idle && arvalid && arready) begin
+            read_addr <= araddr;
+            arready <= 0;
+            rvalid <= 1;
+        end
+        if (read_state == read) begin
+            rdata <= internal_register [read_addr];
+            if (rvalid & rready) begin
+                rvalid <= 0;
+            end
+        end
     end
+
+    read_state <= read_next_state;
 
 end
 
 
+
+
+
+always @(*) begin
+    case(read_state)
+
+    read_idle: if (arvalid & arready) begin
+        read_next_state = read;
+    end else begin
+        read_next_state = read_idle;
+    end
+
+    read: if (rvalid & rready) begin
+        read_next_state = read_idle;
+    end else begin
+        read_next_state = read;
+    end
+
+    endcase
+end
+
+
+// write logic
+
+logic [1:0] write_state, next_write_state;
+
+
+logic [31:0] temp_data;
+logic [6:2] temp_addr;
+logic handshake_add, handshake_data;
+
+parameter write_idle = 0, write = 1;
+
+
+
+
+always_ff @(posedge clk, negedge reset) begin
+
+    if (~reset) begin
+        response <= 2'b00;
+        awready <= 0;
+        wready <= 0;
+        bvalid <= 0;
+    end
+    else begin
+
+        if (awready & awvalid & wready & wvalid) begin
+            temp_addr <= awaddr;
+            temp_data <= wdata;
+            internal_register[temp_addr] <= temp_data;
+            bvalid <= 1;
+        end
+        if (bvalid) begin
+            response <= 2'b00;
+        end
+        if (write_state == write && bready && bvalid) begin
+            bvalid <= 0;
+        end
+
+    end
+
+    write_state <= next_write_state;
+
+end
+
+
+
 always @(*) begin
 
-    WREADY = 1;
-    AWREADY = 1;
-
     case (write_state)
-        WRITE_IDLE:  begin
-            BVALID = 0;
-            if (cap_add & cap_data) begin
-                BVALID = 1;
-                next_write_state = WRITE;
-                write_data = WDATA;
-                REGISTERS_OUT[((32*write_addr) + 31) -: 32] = write_data;
-            end
-            else begin
-                next_write_state = WRITE_IDLE;
-            end
+
+        write_idle: begin
+
+        awready = 1;
+        wready = 1;
+        if (awready & awvalid & wready & wvalid) begin
+            next_write_state = write;
+        end else begin
+            next_write_state = write_idle;
         end
 
-        WRITE: begin
-
-            AWREADY = 0;
-            WREADY = 0;
-
-            if (BREADY) begin
-                BREADY = 0;
-                next_write_state = WRITE_RESP;
-            end
-            else next_write_state = WRITE;
         end
 
-        WRITE_RESP: begin
+        write: begin
 
-            BRESP = 2'b00;
-            
-            
-            if (BREADY) next_write_state = WRITE_IDLE;
-            else next_write_state = WRITE_RESP;
+        if (bready & bvalid) begin
+            next_write_state = write_idle;
+        end else begin
+            next_write_state = write;
+        end
 
         end
+
     endcase
 
 end
-
-
-// READ operations
-
-logic [31:0] addr_reg;
-
-parameter READ_IDLE = 0, READ = 1;
-logic [1:0] read_state, next_read_state;
-
-always @(posedge clk, negedge ARESETN) begin
-    
-    if (~ARESETN) begin
-        RREADY <= 0;
-        ARREADY <= 0;
-        RDATA <= {32{1'b0}};
-
-        read_state <= READ_IDLE;
-    end
-    else begin
-        if (read_state == READ_IDLE) addr_reg <= ARADDR; 
-        read_state <= next_read_state;
-    end 
-
-
-end
-
-
-always @(*) begin
-
-    ARREADY = 1;
-    RVALID = 0;
-    RDATA = {32{1'b0}};
-
-
-    if (read_state == READ_IDLE) begin
-
-        RVALID = 0;
-        if (ARREADY & ARVALID) begin
-            next_read_state = READ;
-        end else begin
-            next_read_state = READ_IDLE;
-        end
-
-
-    end
-    else if (read_state == READ) begin
-
-        ARREADY = 0;
-        RDATA = REGISTERS_IN[(32*addr_reg + 31) -: 32];;
-        RVALID = 1;
-
-        if (RREADY) next_read_state = READ_IDLE;
-        else next_read_state = READ;
-        
-
-    end
-end
-
-
 
 
 endmodule
