@@ -46,16 +46,11 @@ always @(posedge clk, negedge ARESETN) begin
             if (AWVALID & AWREADY) begin 
                 write_addr <= AWADDR;
                 cap_add <= 1;
-            end else cap_add <= 0;
+            end
 
-            if (WVALID & WREADY) beginfv 
+            if (WVALID & WREADY) begin
                 cap_data <= 1;
-            end else cap_data <= 0;
-            
-        end
-
-        if (write_state == WRITE) begin
-            REGISTERS_OUT[((32*write_addr) + 31) -: 32] = write_data;
+            end
             
         end
 
@@ -69,7 +64,6 @@ always @(*) begin
 
     WREADY = 1;
     AWREADY = 1;
-    BVALID = 0;
 
     case (write_state)
         WRITE_IDLE:  begin
@@ -78,6 +72,7 @@ always @(*) begin
                 BVALID = 1;
                 next_write_state = WRITE;
                 write_data = WDATA;
+                REGISTERS_OUT[((32*write_addr) + 31) -: 32] = write_data;
             end
             else begin
                 next_write_state = WRITE_IDLE;
@@ -89,7 +84,10 @@ always @(*) begin
             AWREADY = 0;
             WREADY = 0;
 
-            if (BREADY) next_write_state = WRITE_RESP;
+            if (BREADY) begin
+                BREADY = 0;
+                next_write_state = WRITE_RESP;
+            end
             else next_write_state = WRITE;
         end
 
