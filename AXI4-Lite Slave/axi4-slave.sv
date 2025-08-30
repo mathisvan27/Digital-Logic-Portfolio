@@ -102,21 +102,28 @@ always_ff @(posedge clk, negedge reset) begin
         awready <= 0;
         wready <= 0;
         bvalid <= 0;
+        handshake_add <= 0;
+        handshake_data <= 0;
     end
     else begin
-
-        if (awready & awvalid & wready & wvalid) begin
+        if (awready & awvalid) begin
+            handshake_add <= 1;
             temp_addr <= awaddr;
+        end
+        if (wready & wvalid) begin
+            handshake_data <= 1;
             temp_data <= wdata;
+        end
+        if (write_state == write_idle && handshake_add && handshake_data) begin
             internal_register[temp_addr] <= temp_data;
+            response <= 2'b00;
             bvalid <= 1;
         end
-        if (bvalid) begin
-            response <= 2'b00;
-        end
         if (write_state == write && bready && bvalid) begin
+            handshake_add <= 0;
+            handshake_data <= 0;
             bvalid <= 0;
-        end
+        end 
 
     end
 
@@ -134,7 +141,7 @@ always @(*) begin
 
         awready = 1;
         wready = 1;
-        if (awready & awvalid & wready & wvalid) begin
+        if (handshake_add & handshake_data) begin
             next_write_state = write;
         end else begin
             next_write_state = write_idle;
@@ -143,7 +150,8 @@ always @(*) begin
         end
 
         write: begin
-
+        awready = 0;
+        wready = 0;
         if (bready & bvalid) begin
             next_write_state = write_idle;
         end else begin
